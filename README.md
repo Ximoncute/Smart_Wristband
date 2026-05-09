@@ -43,6 +43,8 @@ UART connection:
 | RX20 | TX17 |
 | GND | GND |
 
+<img width="663" height="421" alt="image" src="https://github.com/user-attachments/assets/6f2e6440-f14c-41c5-958f-56911d1ae145" />
+
 ---
 
 ## 📊 Example Output
