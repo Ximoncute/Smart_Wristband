@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Smart Health Bracelet</title>
+
+  <style>
+    *{
+      margin:0;
+      padding:0;
+      box-sizing:border-box;
+      font-family:Arial, Helvetica, sans-serif;
+    }
+
+    body{
+      background:#0f172a;
+      color:white;
+      min-height:100vh;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      padding:20px;
+    }
+
+    .container{
+      width:100%;
+      max-width:1100px;
+    }
+
+    .title{
+      text-align:center;
+      font-size:42px;
+      font-weight:bold;
+      margin-bottom:30px;
+      color:#38bdf8;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+      gap:20px;
+    }
+
+    .card{
+      background:#1e293b;
+      border-radius:20px;
+      padding:25px;
+      box-shadow:0 0 20px rgba(0,0,0,0.4);
+      transition:0.3s;
+    }
+
+    .card:hover{
+      transform:translateY(-5px);
+    }
+
+    .card-title{
+      font-size:20px;
+      margin-bottom:15px;
+      color:#94a3b8;
+    }
+
+    .value{
+      font-size:55px;
+      font-weight:bold;
+    }
+
+    .unit{
+      font-size:24px;
+      color:#94a3b8;
+    }
+
+    .normal{
+      color:#22c55e;
+    }
+
+    .danger{
+      color:#ef4444;
+      animation:blink 1s infinite;
+    }
+
+    .motion{
+      font-size:24px;
+      line-height:1.8;
+    }
+
+    .status{
+      margin-top:20px;
+      text-align:center;
+      font-size:22px;
+      padding:15px;
+      border-radius:15px;
+      background:#1e293b;
+    }
+
+    .connected{
+      color:#22c55e;
+    }
+
+    .warning-box{
+      margin-top:20px;
+      padding:20px;
+      background:#7f1d1d;
+      border-radius:15px;
+      text-align:center;
+      font-size:24px;
+      font-weight:bold;
+      display:none;
+    }
+
+    @keyframes blink{
+      0%{opacity:1;}
+      50%{opacity:0.3;}
+      100%{opacity:1;}
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="title">
+    SMART HEALTH BRACELET
+  </div>
+
+  <div class="grid">
+
+    <!-- BPM -->
+    <div class="card">
+      <div class="card-title">❤️ Heart Rate</div>
+
+      <div id="bpm" class="value normal">
+        76
+      </div>
+
+      <div class="unit">BPM</div>
+    </div>
+
+    <!-- SPO2 -->
+    <div class="card">
+      <div class="card-title">🩸 Blood Oxygen</div>
+
+      <div id="spo2" class="value normal">
+        98
+      </div>
+
+      <div class="unit">%</div>
+    </div>
+
+    <!-- MOTION -->
+    <div class="card">
+      <div class="card-title">🛰 Motion Sensor</div>
+
+      <div class="motion">
+        AX: <span id="ax">0.00</span><br>
+        AY: <span id="ay">0.00</span><br>
+        AZ: <span id="az">0.00</span>
+      </div>
+    </div>
+
+    <!-- UART -->
+    <div class="card">
+      <div class="card-title">📡 UART Status</div>
+
+      <div class="motion connected">
+        CONNECTED
+      </div>
+    </div>
+
+  </div>
+
+  <!-- STATUS -->
+  <div class="status">
+    STATUS: <span id="statusText" class="connected">NORMAL</span>
+  </div>
+
+  <!-- WARNING -->
+  <div id="warningBox" class="warning-box">
+    ⚠ WARNING: ABNORMAL HEALTH DETECTED
+  </div>
+
+</div>
+
+<script>
+
+  // ================= DEMO DATA =================
+
+  let bpm = 76;
+  let spo2 = 98;
+
+  let ax = 0.00;
+  let ay = 0.00;
+  let az = 0.00;
+
+  function updateUI()
+  {
+      // ===== RANDOM DEMO =====
+      bpm = Math.floor(Math.random() * 60) + 40;
+      spo2 = Math.floor(Math.random() * 15) + 85;
+
+      ax = (Math.random() * 2 - 1).toFixed(2);
+      ay = (Math.random() * 2 - 1).toFixed(2);
+      az = (Math.random() * 2 - 1).toFixed(2);
+
+      // ===== UPDATE TEXT =====
+      document.getElementById("bpm").innerText = bpm;
+      document.getElementById("spo2").innerText = spo2;
+
+      document.getElementById("ax").innerText = ax;
+      document.getElementById("ay").innerText = ay;
+      document.getElementById("az").innerText = az;
+
+      // ===== WARNING =====
+      let danger = false;
+
+      if(bpm < 45 || spo2 < 90)
+      {
+          danger = true;
+      }
+
+      const bpmEl = document.getElementById("bpm");
+      const spo2El = document.getElementById("spo2");
+
+      const warningBox = document.getElementById("warningBox");
+
+      const statusText = document.getElementById("statusText");
+
+      if(danger)
+      {
+          bpmEl.className = "value danger";
+          spo2El.className = "value danger";
+
+          warningBox.style.display = "block";
+
+          statusText.innerText = "WARNING";
+          statusText.style.color = "#ef4444";
+      }
+      else
+      {
+          bpmEl.className = "value normal";
+          spo2El.className = "value normal";
+
+          warningBox.style.display = "none";
+
+          statusText.innerText = "NORMAL";
+          statusText.style.color = "#22c55e";
+      }
+  }
+
+  // ===== UPDATE EVERY 2s =====
+  setInterval(updateUI, 2000);
+
+</script>
+
+</body>
+</html>
