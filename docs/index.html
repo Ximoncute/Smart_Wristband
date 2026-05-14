@@ -1,257 +1,611 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Smart Health Bracelet</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Smart Watch Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/mqtt@4.3.7/dist/mqtt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-  <style>
-    *{
-      margin:0;
-      padding:0;
-      box-sizing:border-box;
-      font-family:Arial, Helvetica, sans-serif;
-    }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            padding: 12px;
+        }
 
-    body{
-      background:#0f172a;
-      color:white;
-      min-height:100vh;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      padding:20px;
-    }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
 
-    .container{
-      width:100%;
-      max-width:1100px;
-    }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            padding: 12px 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
 
-    .title{
-      text-align:center;
-      font-size:42px;
-      font-weight:bold;
-      margin-bottom:30px;
-      color:#38bdf8;
-    }
+        h1 {
+            color: white;
+            font-size: 1.2em;
+            font-weight: 600;
+        }
 
-    .grid{
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
-      gap:20px;
-    }
+        .connection-status {
+            background: rgba(0,0,0,0.6);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
 
-    .card{
-      background:#1e293b;
-      border-radius:20px;
-      padding:25px;
-      box-shadow:0 0 20px rgba(0,0,0,0.4);
-      transition:0.3s;
-    }
+        .connected { color: #2ecc71; }
+        .disconnected { color: #e74c3c; }
 
-    .card:hover{
-      transform:translateY(-5px);
-    }
+        .main-content {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
 
-    .card-title{
-      font-size:20px;
-      margin-bottom:15px;
-      color:#94a3b8;
-    }
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        }
 
-    .value{
-      font-size:55px;
-      font-weight:bold;
-    }
+        .card-title {
+            font-size: 1em;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #ecf0f1;
+        }
 
-    .unit{
-      font-size:24px;
-      color:#94a3b8;
-    }
+        .big-value {
+            text-align: center;
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
 
-    .normal{
-      color:#22c55e;
-    }
+        .heart-rate-value { color: #e74c3c; }
+        .spo2-value { color: #3498db; }
 
-    .danger{
-      color:#ef4444;
-      animation:blink 1s infinite;
-    }
+        .status-badge {
+            text-align: center;
+            padding: 6px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            margin: 8px 0;
+        }
 
-    .motion{
-      font-size:24px;
-      line-height:1.8;
-    }
+        .status-good { background: #d4edda; color: #155724; }
+        .status-warning { background: #fff3cd; color: #856404; }
+        .status-danger { background: #f8d7da; color: #721c24; }
+        .status-normal { background: #e2e3e5; color: #383d41; }
 
-    .status{
-      margin-top:20px;
-      text-align:center;
-      font-size:22px;
-      padding:15px;
-      border-radius:15px;
-      background:#1e293b;
-    }
+        .chart-container {
+            height: 150px;
+            margin-top: 10px;
+        }
 
-    .connected{
-      color:#22c55e;
-    }
+        .control-group {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
 
-    .warning-box{
-      margin-top:20px;
-      padding:20px;
-      background:#7f1d1d;
-      border-radius:15px;
-      text-align:center;
-      font-size:24px;
-      font-weight:bold;
-      display:none;
-    }
+        .control-group:last-child { margin-bottom: 0; }
 
-    @keyframes blink{
-      0%{opacity:1;}
-      50%{opacity:0.3;}
-      100%{opacity:1;}
-    }
-  </style>
+        .control-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 8px;
+        }
+
+        .mode-buttons {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .mode-auto {
+            background: #6c757d;
+            color: white;
+        }
+        .mode-auto.active { background: #28a745; }
+
+        .mode-manual {
+            background: #fd7e14;
+            color: white;
+        }
+        .mode-manual.active { background: #e8590c; }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-on { background: #28a745; color: white; }
+        .btn-off { background: #dc3545; color: white; }
+        .btn-on.active { background: #1e7e34; }
+        .btn-off.active { background: #bd2130; }
+
+        .mode-text {
+            font-size: 11px;
+            color: #6c757d;
+            text-align: center;
+            margin-top: 8px;
+        }
+
+        .ai-status {
+            text-align: center;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            margin-bottom: 15px;
+        }
+
+        .ai-status-label {
+            font-size: 12px;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+
+        .ai-status-value {
+            font-size: 1.4em;
+            font-weight: bold;
+        }
+
+        .ai-score {
+            font-size: 11px;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        .log-section {
+            background: white;
+            border-radius: 16px;
+            padding: 12px;
+            max-height: 250px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            flex-shrink: 0;
+        }
+
+        .log-header h3 { font-size: 0.9em; color: #2c3e50; }
+
+        .btn-download {
+            background: #3498db;
+            color: white;
+            padding: 5px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .table-wrapper {
+            flex: 1;
+            overflow-y: auto;
+            border: 1px solid #ecf0f1;
+            border-radius: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+
+        th, td {
+            border: 1px solid #ecf0f1;
+            padding: 6px 8px;
+            text-align: left;
+        }
+
+        th {
+            background: #ecf0f1;
+            color: #2c3e50;
+            position: sticky;
+            top: 0;
+        }
+
+        @media (max-width: 800px) {
+            .main-content { gap: 8px; }
+            .big-value { font-size: 1.8em; }
+        }
+    </style>
 </head>
-
 <body>
+    <div class="container">
+        <div class="header">
+            <h1>HỆ THỐNG THEO DÕI VÒNG TAY THÔNG MINH</h1>
+            <div class="connection-status">
+                MQTT: <span id="mqtt-status" class="disconnected">Offline</span>
+            </div>
+        </div>
 
-<div class="container">
+        <div class="main-content">
+            <!-- Nhịp tim -->
+            <div class="card">
+                <div class="card-title">NHỊP TIM</div>
+                <div class="big-value heart-rate-value" id="heart-rate">--</div>
+                <div class="status-badge" id="finger-status">Đang chờ</div>
+                <div class="chart-container">
+                    <canvas id="hr-chart"></canvas>
+                </div>
+            </div>
 
-  <div class="title">
-    SMART HEALTH BRACELET
-  </div>
+            <!-- SpO2 -->
+            <div class="card">
+                <div class="card-title">SpO2</div>
+                <div class="big-value spo2-value" id="spo2">--</div>
+                <div class="status-badge" id="spo2-status"></div>
+                <div class="chart-container">
+                    <canvas id="spo2-chart"></canvas>
+                </div>
+            </div>
 
-  <div class="grid">
+            <!-- Điều khiển -->
+            <div class="card">
+                <div class="card-title">ĐIỀU KHIỂN</div>
+                
+                <div class="ai-status">
+                    <div class="ai-status-label">PHÁT HIỆN</div>
+                    <div class="ai-status-value" id="ai-status">Bình thường</div>
+                    <div class="ai-score" id="fall-score"></div>
+                </div>
 
-    <!-- BPM -->
-    <div class="card">
-      <div class="card-title">❤️ Heart Rate</div>
+                <div class="control-group">
+                    <div class="control-label">CÒI BUZZER</div>
+                    <div class="mode-buttons">
+                        <button class="mode-btn mode-auto" id="buzzer-auto">TỰ ĐỘNG</button>
+                        <button class="mode-btn mode-manual" id="buzzer-manual">THỦ CÔNG</button>
+                    </div>
+                    <div class="action-buttons">
+                        <button class="action-btn btn-on" id="buzzer-on">BẬT CÒI</button>
+                        <button class="action-btn btn-off" id="buzzer-off">TẮT CÒI</button>
+                    </div>
+                    <div class="mode-text" id="buzzer-mode-text">Chế độ: Tự động</div>
+                </div>
 
-      <div id="bpm" class="value normal">
-        76
-      </div>
+                <div class="control-group">
+                    <div class="control-label">ĐÈN LED</div>
+                    <div class="mode-buttons">
+                        <button class="mode-btn mode-auto" id="led-auto">TỰ ĐỘNG</button>
+                        <button class="mode-btn mode-manual" id="led-manual">THỦ CÔNG</button>
+                    </div>
+                    <div class="action-buttons">
+                        <button class="action-btn btn-on" id="led-on">BẬT ĐÈN</button>
+                        <button class="action-btn btn-off" id="led-off">TẮT ĐÈN</button>
+                    </div>
+                    <div class="mode-text" id="led-mode-text">Chế độ: Tự động</div>
+                </div>
+            </div>
+        </div>
 
-      <div class="unit">BPM</div>
+        <!-- Log -->
+        <div class="log-section">
+            <div class="log-header">
+                <h3>LOG DỮ LIỆU</h3>
+                <button class="btn-download" onclick="downloadCSV()">XUẤT CSV</button>
+            </div>
+            <div class="table-wrapper">
+                <table id="log-table">
+                    <thead>
+                        <tr><th>Thời gian</th><th>Nhịp tim</th><th>SpO2</th><th>Ngón tay</th><th>Trạng thái</th><th>Độ chính xác</th></tr>
+                    </thead>
+                    <tbody id="log-body">
+                        <tr><td colspan="6" style="text-align:center">Đang kết nối...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
-    <!-- SPO2 -->
-    <div class="card">
-      <div class="card-title">🩸 Blood Oxygen</div>
+    <script>
+        const mqttBroker = "wss://broker.emqx.io:8084/mqtt";
+        let client = null;
+        let hrChart, spo2Chart;
+        let hrData = [], spo2Data = [], timeLabels = [];
+        let logData = [];
+        
+        let buzzerMode = 'AUTO';
+        let ledMode = 'AUTO';
+        let currentFingerStatus = 'no_finger';
+        let currentHeartRate = '--';
+        let currentSpO2 = '--';
+        let currentFallScore = 0;
+        let currentFallStatus = 'normal';
 
-      <div id="spo2" class="value normal">
-        98
-      </div>
+        const TOPICS = {
+            HEART_RATE: "smart_watch/heart_rate",
+            SPO2: "smart_watch/spo2",
+            FINGER_STATUS: "smart_watch/finger_status",
+            FALL_STATUS: "smart_watch/fall_status",
+            FALL_SCORE: "smart_watch/fall_score",
+            BUZZER_CONTROL: "smart_watch/buzzer/control",
+            LED_CONTROL: "smart_watch/led/control"
+        };
 
-      <div class="unit">%</div>
-    </div>
+        function initCharts() {
+            hrChart = new Chart(document.getElementById('hr-chart'), {
+                type: 'line',
+                data: { labels: [], datasets: [{ data: [], borderColor: '#e74c3c', borderWidth: 2, fill: true, tension: 0.3 }] },
+                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { y: { max: 200 } } }
+            });
+            spo2Chart = new Chart(document.getElementById('spo2-chart'), {
+                type: 'line',
+                data: { labels: [], datasets: [{ data: [], borderColor: '#3498db', borderWidth: 2, fill: true, tension: 0.3 }] },
+                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { y: { max: 100 } } }
+            });
+        }
 
-    <!-- MOTION -->
-    <div class="card">
-      <div class="card-title">🛰 Motion Sensor</div>
+        function updateUI() {
+            document.getElementById('buzzer-mode-text').innerHTML = `Chế độ: ${buzzerMode === 'AUTO' ? 'Tự động' : 'Thủ công'}`;
+            document.getElementById('led-mode-text').innerHTML = `Chế độ: ${ledMode === 'AUTO' ? 'Tự động' : 'Thủ công'}`;
+            
+            const buzzerAuto = document.getElementById('buzzer-auto');
+            const buzzerManual = document.getElementById('buzzer-manual');
+            buzzerAuto.classList.toggle('active', buzzerMode === 'AUTO');
+            buzzerManual.classList.toggle('active', buzzerMode === 'MANUAL');
+            
+            const ledAuto = document.getElementById('led-auto');
+            const ledManual = document.getElementById('led-manual');
+            ledAuto.classList.toggle('active', ledMode === 'AUTO');
+            ledManual.classList.toggle('active', ledMode === 'MANUAL');
+            
+            const isManual = buzzerMode === 'MANUAL';
+            document.getElementById('buzzer-on').disabled = !isManual;
+            document.getElementById('buzzer-off').disabled = !isManual;
+        }
 
-      <div class="motion">
-        AX: <span id="ax">0.00</span><br>
-        AY: <span id="ay">0.00</span><br>
-        AZ: <span id="az">0.00</span>
-      </div>
-    </div>
+        function sendBuzzerCommand(cmd) {
+            if (client && client.connected) {
+                client.publish(TOPICS.BUZZER_CONTROL, cmd);
+                console.log("Sent buzzer:", cmd);
+            }
+        }
 
-    <!-- UART -->
-    <div class="card">
-      <div class="card-title">📡 UART Status</div>
+        function sendLEDCommand(cmd) {
+            if (client && client.connected) {
+                client.publish(TOPICS.LED_CONTROL, cmd);
+            }
+        }
 
-      <div class="motion connected">
-        CONNECTED
-      </div>
-    </div>
+        function setBuzzerMode(mode) {
+            buzzerMode = mode;
+            sendBuzzerCommand(mode);
+            updateUI();
+        }
 
-  </div>
+        function setLEDMode(mode) {
+            ledMode = mode;
+            sendLEDCommand(mode);
+            updateUI();
+        }
 
-  <!-- STATUS -->
-  <div class="status">
-    STATUS: <span id="statusText" class="connected">NORMAL</span>
-  </div>
+        function addLog() {
+            const fingerText = currentFingerStatus === 'detected' ? 'Có ngón' : (currentFingerStatus === 'stabilizing' ? 'Đang ổn định' : 'Không ngón');
+            const fallText = currentFallStatus === 'fall' ? 'PHÁT HIỆN NGÃ' : 'Bình thường';
+            const accuracyText = (currentFallStatus === 'fall' && currentFallScore > 0) ? `${(currentFallScore * 100).toFixed(1)}%` : '';
+            
+            logData.unshift({
+                time: new Date().toLocaleString('vi-VN'),
+                heartRate: currentHeartRate,
+                spo2: currentSpO2,
+                fingerStatus: fingerText,
+                fallStatus: fallText,
+                accuracy: accuracyText
+            });
+            if (logData.length > 50) logData.pop();
+            
+            const tbody = document.getElementById('log-body');
+            tbody.innerHTML = logData.map(row => `
+                <tr>
+                    <td>${row.time}</td>
+                    <td>${row.heartRate}</td>
+                    <td>${row.spo2}</td>
+                    <td>${row.fingerStatus}</td>
+                    <td>${row.fallStatus}</td>
+                    <td>${row.accuracy}</td>
+                </tr>
+            `).join('');
+        }
 
-  <!-- WARNING -->
-  <div id="warningBox" class="warning-box">
-    ⚠ WARNING: ABNORMAL HEALTH DETECTED
-  </div>
+        function downloadCSV() {
+            let csv = "Thời gian,Nhịp tim,SpO2,Ngón tay,Trạng thái,Độ chính xác\n";
+            logData.forEach(row => {
+                csv += `${row.time},${row.heartRate},${row.spo2},${row.fingerStatus},${row.fallStatus},${row.accuracy}\n`;
+            });
+            const blob = new Blob(["\uFEFF" + csv], { type: "text/csv" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `smartwatch_${Date.now()}.csv`;
+            link.click();
+        }
 
-</div>
+        function updateHeartRate(v) {
+            if (v === 'invalid' || currentFingerStatus === 'no_finger') {
+                currentHeartRate = '--';
+                document.getElementById('heart-rate').innerHTML = '--';
+            } else {
+                currentHeartRate = v;
+                document.getElementById('heart-rate').innerHTML = v;
+                hrData.push(parseInt(v));
+                if (hrData.length > 10) hrData.shift();
+                timeLabels.push(new Date().toLocaleTimeString().slice(0,5));
+                if (timeLabels.length > 10) timeLabels.shift();
+                hrChart.data.labels = [...timeLabels];
+                hrChart.data.datasets[0].data = [...hrData];
+                hrChart.update('none');
+            }
+            addLog();
+        }
 
-<script>
+        function updateSpO2(v) {
+            const statusEl = document.getElementById('spo2-status');
+            if (v === 'invalid' || currentFingerStatus === 'no_finger') {
+                currentSpO2 = '--';
+                document.getElementById('spo2').innerHTML = '--';
+                statusEl.innerHTML = 'Không đo được';
+                statusEl.className = 'status-badge status-warning';
+            } else {
+                currentSpO2 = v;
+                document.getElementById('spo2').innerHTML = v;
+                spo2Data.push(parseInt(v));
+                if (spo2Data.length > 10) spo2Data.shift();
+                spo2Chart.data.datasets[0].data = [...spo2Data];
+                spo2Chart.update('none');
+                
+                const val = parseInt(v);
+                if (val < 92) {
+                    statusEl.innerHTML = 'Cảnh báo thấp';
+                    statusEl.className = 'status-badge status-danger';
+                } else if (val < 95) {
+                    statusEl.innerHTML = 'Thiếu oxy nhẹ';
+                    statusEl.className = 'status-badge status-warning';
+                } else {
+                    statusEl.innerHTML = 'Bình thường';
+                    statusEl.className = 'status-badge status-good';
+                }
+            }
+            addLog();
+        }
 
-  // ================= DEMO DATA =================
+        function updateFinger(v) {
+            const el = document.getElementById('finger-status');
+            currentFingerStatus = v;
+            if (v === 'no_finger') {
+                el.innerHTML = 'Không có ngón tay';
+                el.className = 'status-badge status-warning';
+                document.getElementById('heart-rate').innerHTML = '--';
+                document.getElementById('spo2').innerHTML = '--';
+                currentHeartRate = '--';
+                currentSpO2 = '--';
+            } else if (v === 'stabilizing') {
+                el.innerHTML = 'Đang ổn định... giữ yên tay';
+                el.className = 'status-badge status-normal';
+            } else {
+                el.innerHTML = 'Đang đo';
+                el.className = 'status-badge status-good';
+            }
+            addLog();
+        }
 
-  let bpm = 76;
-  let spo2 = 98;
+        function updateAI(v, score) {
+            currentFallStatus = v;
+            currentFallScore = score;
+            const el = document.getElementById('ai-status');
+            const scoreEl = document.getElementById('fall-score');
+            if (v === 'fall') {
+                el.innerHTML = 'PHÁT HIỆN NGÃ';
+                el.style.color = '#e74c3c';
+                scoreEl.innerHTML = score > 0 ? `Độ chính xác: ${(score * 100).toFixed(1)}%` : '';
+            } else {
+                el.innerHTML = 'Bình thường';
+                el.style.color = '#2c3e50';
+                scoreEl.innerHTML = '';
+            }
+            addLog();
+        }
 
-  let ax = 0.00;
-  let ay = 0.00;
-  let az = 0.00;
+        function connectMQTT() {
+            client = mqtt.connect("wss://broker.emqx.io:8084/mqtt", {
+                clientId: "web_" + Math.random().toString(16).substr(2, 8)
+            });
+            client.on('connect', () => {
+                document.getElementById('mqtt-status').innerHTML = 'Online';
+                document.getElementById('mqtt-status').className = 'connected';
+                client.subscribe(TOPICS.HEART_RATE);
+                client.subscribe(TOPICS.SPO2);
+                client.subscribe(TOPICS.FINGER_STATUS);
+                client.subscribe(TOPICS.FALL_STATUS);
+                client.subscribe(TOPICS.FALL_SCORE);
+            });
+            client.on('message', (topic, msg) => {
+                const val = msg.toString();
+                switch(topic) {
+                    case TOPICS.HEART_RATE: updateHeartRate(val); break;
+                    case TOPICS.SPO2: updateSpO2(val); break;
+                    case TOPICS.FINGER_STATUS: updateFinger(val); break;
+                    case TOPICS.FALL_STATUS: updateAI(val, currentFallScore); break;
+                    case TOPICS.FALL_SCORE: updateAI(currentFallStatus, parseFloat(val)); break;
+                }
+            });
+        }
 
-  function updateUI()
-  {
-      // ===== RANDOM DEMO =====
-      bpm = Math.floor(Math.random() * 60) + 40;
-      spo2 = Math.floor(Math.random() * 15) + 85;
+        // Gắn sự kiện
+        document.getElementById('buzzer-auto').onclick = () => setBuzzerMode('AUTO');
+        document.getElementById('buzzer-manual').onclick = () => setBuzzerMode('MANUAL');
+        document.getElementById('buzzer-on').onclick = () => sendBuzzerCommand('ON');
+        document.getElementById('buzzer-off').onclick = () => sendBuzzerCommand('OFF');
+        document.getElementById('led-auto').onclick = () => setLEDMode('AUTO');
+        document.getElementById('led-manual').onclick = () => setLEDMode('MANUAL');
+        document.getElementById('led-on').onclick = () => sendLEDCommand('ON');
+        document.getElementById('led-off').onclick = () => sendLEDCommand('OFF');
 
-      ax = (Math.random() * 2 - 1).toFixed(2);
-      ay = (Math.random() * 2 - 1).toFixed(2);
-      az = (Math.random() * 2 - 1).toFixed(2);
-
-      // ===== UPDATE TEXT =====
-      document.getElementById("bpm").innerText = bpm;
-      document.getElementById("spo2").innerText = spo2;
-
-      document.getElementById("ax").innerText = ax;
-      document.getElementById("ay").innerText = ay;
-      document.getElementById("az").innerText = az;
-
-      // ===== WARNING =====
-      let danger = false;
-
-      if(bpm < 45 || spo2 < 90)
-      {
-          danger = true;
-      }
-
-      const bpmEl = document.getElementById("bpm");
-      const spo2El = document.getElementById("spo2");
-
-      const warningBox = document.getElementById("warningBox");
-
-      const statusText = document.getElementById("statusText");
-
-      if(danger)
-      {
-          bpmEl.className = "value danger";
-          spo2El.className = "value danger";
-
-          warningBox.style.display = "block";
-
-          statusText.innerText = "WARNING";
-          statusText.style.color = "#ef4444";
-      }
-      else
-      {
-          bpmEl.className = "value normal";
-          spo2El.className = "value normal";
-
-          warningBox.style.display = "none";
-
-          statusText.innerText = "NORMAL";
-          statusText.style.color = "#22c55e";
-      }
-  }
-
-  // ===== UPDATE EVERY 2s =====
-  setInterval(updateUI, 2000);
-
-</script>
-
+        initCharts();
+        connectMQTT();
+        updateUI();
+    </script>
 </body>
 </html>

@@ -4,31 +4,31 @@
 
 #define BUZZER_PIN 15
 
-// Khai báo đối tượng Wire với chân I2C
-TwoWire I2C_BMI = TwoWire(0);
-
 void setup() {
   Serial.begin(115200);
   while (!Serial);
+  delay(1000);
 
   pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, LOW);
 
-  // Khởi tạo I2C với chân 21 (SDA), 22 (SCL)
-  I2C_BMI.begin(21, 22, 400000);
+  // Khởi tạo I2C với tốc độ 100kHz (ổn định hơn 400kHz)
+  Wire.begin(4, 5);
+  Wire.setClock(100000);
   
-  // Khởi tạo BMI160 với địa chỉ 0x69 - CÁCH ĐÚNG
-  // LƯU Ý: tham số thứ 2 là object TwoWire, tham số thứ 3 là địa chỉ I2C
-  if (!BMI160.begin(BMI160GenClass::I2C_MODE, I2C_BMI, 0x69)) {
-    Serial.println("BMI160 init failed! Check wiring and address 0x69");
+  delay(100);
+  
+  // Khởi tạo BMI160 - ĐỊA CHỈ 0x69 (đã scan thấy)
+  if (!BMI160.begin(BMI160GenClass::I2C_MODE, Wire, 0x69)) {
+    Serial.println("BMI160 init failed!");
     while (1);
   }
   
-  // Cấu hình tần số lấy mẫu 50 Hz
+  // Cấu hình 50 Hz
   BMI160.setAccelerometerRate(50);
   BMI160.setGyroRate(50);
-  BMI160.setAccelerometerRange(2);  // ±2g
-  BMI160.setGyroRange(250);         // ±250 dps
+  BMI160.setAccelerometerRange(2);
+  BMI160.setGyroRange(250);
 
   Serial.println("BMI160 OK - Ready");
 }
@@ -37,16 +37,16 @@ void loop() {
   int axRaw, ayRaw, azRaw;
   int gxRaw, gyRaw, gzRaw;
 
-  // Đọc dữ liệu - DÙNG readGyro (không phải readGyroscope)
+  // Đọc dữ liệu
   BMI160.readAccelerometer(axRaw, ayRaw, azRaw);
-  BMI160.readGyro(gxRaw, gyRaw, gzRaw);  // ← sửa thành readGyro
+  BMI160.readGyro(gxRaw, gyRaw, gzRaw);
 
-  // Chuyển đổi sang m/s² cho gia tốc
+  // Chuyển đổi sang m/s²
   float ax = (float)axRaw / 16384.0 * 9.80665;
   float ay = (float)ayRaw / 16384.0 * 9.80665;
   float az = (float)azRaw / 16384.0 * 9.80665;
   
-  // Chuyển đổi sang rad/s cho gyro
+  // Chuyển đổi sang rad/s
   float gx = (float)gxRaw / 131.0 * 0.0174533;
   float gy = (float)gyRaw / 131.0 * 0.0174533;
   float gz = (float)gzRaw / 131.0 * 0.0174533;
@@ -84,7 +84,7 @@ void loop() {
       }
     }
 
-    if (fall_score > 0.7) {
+    if (fall_score > 0.25) {
       Serial.println("!!! FALL DETECTED !!!");
       digitalWrite(BUZZER_PIN, HIGH);
       delay(2000);
