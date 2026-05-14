@@ -177,8 +177,6 @@
 
         .btn-on { background: #28a745; color: white; }
         .btn-off { background: #dc3545; color: white; }
-        .btn-on.active { background: #1e7e34; }
-        .btn-off.active { background: #bd2130; }
 
         .mode-text {
             font-size: 11px;
@@ -216,7 +214,7 @@
             background: white;
             border-radius: 16px;
             padding: 12px;
-            max-height: 250px;
+            max-height: 300px;
             display: flex;
             flex-direction: column;
         }
@@ -252,12 +250,12 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 11px;
+            font-size: 12px;
         }
 
         th, td {
             border: 1px solid #ecf0f1;
-            padding: 6px 8px;
+            padding: 8px 10px;
             text-align: left;
         }
 
@@ -268,9 +266,14 @@
             top: 0;
         }
 
+        .no-finger-row {
+            background-color: #fff3cd;
+        }
+
         @media (max-width: 800px) {
             .main-content { gap: 8px; }
             .big-value { font-size: 1.8em; }
+            th, td { padding: 5px 6px; font-size: 10px; }
         }
     </style>
 </head>
@@ -284,7 +287,6 @@
         </div>
 
         <div class="main-content">
-            <!-- Nhịp tim -->
             <div class="card">
                 <div class="card-title">NHỊP TIM</div>
                 <div class="big-value heart-rate-value" id="heart-rate">--</div>
@@ -294,7 +296,6 @@
                 </div>
             </div>
 
-            <!-- SpO2 -->
             <div class="card">
                 <div class="card-title">SpO2</div>
                 <div class="big-value spo2-value" id="spo2">--</div>
@@ -304,7 +305,6 @@
                 </div>
             </div>
 
-            <!-- Điều khiển -->
             <div class="card">
                 <div class="card-title">ĐIỀU KHIỂN</div>
                 
@@ -342,7 +342,6 @@
             </div>
         </div>
 
-        <!-- Log -->
         <div class="log-section">
             <div class="log-header">
                 <h3>LOG DỮ LIỆU</h3>
@@ -351,10 +350,9 @@
             <div class="table-wrapper">
                 <table id="log-table">
                     <thead>
-                        <tr><th>Thời gian</th><th>Nhịp tim</th><th>SpO2</th><th>Ngón tay</th><th>Trạng thái</th><th>Độ chính xác</th></tr>
-                    </thead>
+                        <tr><th>Thời gian</th><th>Nhịp tim</th><th>SpO2</th><th>Ngón tay</th><th>Trạng thái</th></thead>
                     <tbody id="log-body">
-                        <tr><td colspan="6" style="text-align:center">Đang kết nối...</td></tr>
+                        <tr><td colspan="5" style="text-align:center">Đang kết nối...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -365,7 +363,7 @@
         const mqttBroker = "wss://broker.emqx.io:8084/mqtt";
         let client = null;
         let hrChart, spo2Chart;
-        let hrData = [], spo2Data = [], timeLabels = [];
+        let hrData = [], spo2Data = [];
         let logData = [];
         
         let buzzerMode = 'AUTO';
@@ -375,6 +373,11 @@
         let currentSpO2 = '--';
         let currentFallScore = 0;
         let currentFallStatus = 'normal';
+        
+        let lastLogTime = 0;
+        let lastLogHeartRate = '';
+        let lastLogSpO2 = '';
+        let lastLogFinger = '';
 
         const TOPICS = {
             HEART_RATE: "smart_watch/heart_rate",
@@ -387,16 +390,46 @@
         };
 
         function initCharts() {
-            hrChart = new Chart(document.getElementById('hr-chart'), {
+            const hrCtx = document.getElementById('hr-chart').getContext('2d');
+            hrChart = new Chart(hrCtx, {
                 type: 'line',
-                data: { labels: [], datasets: [{ data: [], borderColor: '#e74c3c', borderWidth: 2, fill: true, tension: 0.3 }] },
-                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { y: { max: 200 } } }
+                data: { labels: [], datasets: [{ label: 'BPM', data: [], borderColor: '#e74c3c', backgroundColor: 'rgba(231, 76, 60, 0.1)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 3 }] },
+                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { y: { min: 40, max: 150 } } }
             });
-            spo2Chart = new Chart(document.getElementById('spo2-chart'), {
+
+            const spo2Ctx = document.getElementById('spo2-chart').getContext('2d');
+            spo2Chart = new Chart(spo2Ctx, {
                 type: 'line',
-                data: { labels: [], datasets: [{ data: [], borderColor: '#3498db', borderWidth: 2, fill: true, tension: 0.3 }] },
-                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { y: { max: 100 } } }
+                data: { labels: [], datasets: [{ label: 'SpO2', data: [], borderColor: '#3498db', backgroundColor: 'rgba(52, 152, 219, 0.1)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 3 }] },
+                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { y: { min: 70, max: 100 } } }
             });
+        }
+
+        function updateCharts(hrValue, spo2Value) {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            if (hrValue !== null && hrValue !== '--' && !isNaN(hrValue)) {
+                hrData.push(hrValue);
+                if (hrData.length > 15) hrData.shift();
+                const hrLabels = hrChart.data.labels;
+                hrLabels.push(timeStr);
+                if (hrLabels.length > 15) hrLabels.shift();
+                hrChart.data.labels = [...hrLabels];
+                hrChart.data.datasets[0].data = [...hrData];
+                hrChart.update('none');
+            }
+            
+            if (spo2Value !== null && spo2Value !== '--' && !isNaN(spo2Value)) {
+                spo2Data.push(spo2Value);
+                if (spo2Data.length > 15) spo2Data.shift();
+                const spo2Labels = spo2Chart.data.labels;
+                spo2Labels.push(timeStr);
+                if (spo2Labels.length > 15) spo2Labels.shift();
+                spo2Chart.data.labels = [...spo2Labels];
+                spo2Chart.data.datasets[0].data = [...spo2Data];
+                spo2Chart.update('none');
+            }
         }
 
         function updateUI() {
@@ -418,16 +451,22 @@
             document.getElementById('buzzer-off').disabled = !isManual;
         }
 
+        // HÀM GỬI LỆNH MQTT
         function sendBuzzerCommand(cmd) {
             if (client && client.connected) {
                 client.publish(TOPICS.BUZZER_CONTROL, cmd);
                 console.log("Sent buzzer:", cmd);
+                alert(`Đã gửi lệnh: ${cmd}`);
+            } else {
+                console.log("MQTT not connected");
+                alert("Chưa kết nối MQTT!");
             }
         }
 
         function sendLEDCommand(cmd) {
             if (client && client.connected) {
                 client.publish(TOPICS.LED_CONTROL, cmd);
+                console.log("Sent LED:", cmd);
             }
         }
 
@@ -444,37 +483,59 @@
         }
 
         function addLog() {
-            const fingerText = currentFingerStatus === 'detected' ? 'Có ngón' : (currentFingerStatus === 'stabilizing' ? 'Đang ổn định' : 'Không ngón');
-            const fallText = currentFallStatus === 'fall' ? 'PHÁT HIỆN NGÃ' : 'Bình thường';
-            const accuracyText = (currentFallStatus === 'fall' && currentFallScore > 0) ? `${(currentFallScore * 100).toFixed(1)}%` : '';
+            const now = Date.now();
+            if (now - lastLogTime < 1900) return;
+            
+            let fingerText = '';
+            if (currentFingerStatus === 'detected') fingerText = 'Có ngón';
+            else if (currentFingerStatus === 'stabilizing') fingerText = 'Đang ổn định';
+            else fingerText = 'Không ngón';
+            
+            let hrDisplay = (currentHeartRate !== '--' && currentHeartRate !== 'invalid') ? currentHeartRate : '--';
+            let spo2Display = (currentSpO2 !== '--' && currentSpO2 !== 'invalid') ? currentSpO2 : '--';
+            
+            let isChanged = (hrDisplay !== lastLogHeartRate || spo2Display !== lastLogSpO2 || fingerText !== lastLogFinger);
+            if (!isChanged && fingerText !== 'Không ngón') return;
+            
+            lastLogTime = now;
+            lastLogHeartRate = hrDisplay;
+            lastLogSpO2 = spo2Display;
+            lastLogFinger = fingerText;
             
             logData.unshift({
                 time: new Date().toLocaleString('vi-VN'),
-                heartRate: currentHeartRate,
-                spo2: currentSpO2,
+                heartRate: hrDisplay,
+                spo2: spo2Display,
                 fingerStatus: fingerText,
-                fallStatus: fallText,
-                accuracy: accuracyText
+                fallStatus: currentFallStatus === 'fall' ? 'PHÁT HIỆN NGÃ' : 'Bình thường'
             });
-            if (logData.length > 50) logData.pop();
             
+            if (logData.length > 30) logData.pop();
+            updateLogTable();
+        }
+        
+        function updateLogTable() {
             const tbody = document.getElementById('log-body');
-            tbody.innerHTML = logData.map(row => `
-                <tr>
+            if (logData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center">Chưa có dữ liệu</td></tr>';
+                return;
+            }
+            tbody.innerHTML = logData.map(row => {
+                let rowClass = (row.fingerStatus === 'Không ngón') ? 'class="no-finger-row"' : '';
+                return `<tr ${rowClass}>
                     <td>${row.time}</td>
                     <td>${row.heartRate}</td>
                     <td>${row.spo2}</td>
                     <td>${row.fingerStatus}</td>
                     <td>${row.fallStatus}</td>
-                    <td>${row.accuracy}</td>
-                </tr>
-            `).join('');
+                </tr>`;
+            }).join('');
         }
 
         function downloadCSV() {
-            let csv = "Thời gian,Nhịp tim,SpO2,Ngón tay,Trạng thái,Độ chính xác\n";
+            let csv = "Thời gian,Nhịp tim,SpO2,Ngón tay,Trạng thái\n";
             logData.forEach(row => {
-                csv += `${row.time},${row.heartRate},${row.spo2},${row.fingerStatus},${row.fallStatus},${row.accuracy}\n`;
+                csv += `${row.time},${row.heartRate},${row.spo2},${row.fingerStatus},${row.fallStatus}\n`;
             });
             const blob = new Blob(["\uFEFF" + csv], { type: "text/csv" });
             const link = document.createElement("a");
@@ -490,13 +551,7 @@
             } else {
                 currentHeartRate = v;
                 document.getElementById('heart-rate').innerHTML = v;
-                hrData.push(parseInt(v));
-                if (hrData.length > 10) hrData.shift();
-                timeLabels.push(new Date().toLocaleTimeString().slice(0,5));
-                if (timeLabels.length > 10) timeLabels.shift();
-                hrChart.data.labels = [...timeLabels];
-                hrChart.data.datasets[0].data = [...hrData];
-                hrChart.update('none');
+                updateCharts(parseInt(v), null);
             }
             addLog();
         }
@@ -511,11 +566,7 @@
             } else {
                 currentSpO2 = v;
                 document.getElementById('spo2').innerHTML = v;
-                spo2Data.push(parseInt(v));
-                if (spo2Data.length > 10) spo2Data.shift();
-                spo2Chart.data.datasets[0].data = [...spo2Data];
-                spo2Chart.update('none');
-                
+                updateCharts(null, parseInt(v));
                 const val = parseInt(v);
                 if (val < 92) {
                     statusEl.innerHTML = 'Cảnh báo thấp';
@@ -580,6 +631,12 @@
                 client.subscribe(TOPICS.FINGER_STATUS);
                 client.subscribe(TOPICS.FALL_STATUS);
                 client.subscribe(TOPICS.FALL_SCORE);
+                console.log("MQTT Connected");
+            });
+            client.on('error', (err) => {
+                console.error("MQTT Error:", err);
+                document.getElementById('mqtt-status').innerHTML = 'Offline';
+                document.getElementById('mqtt-status').className = 'disconnected';
             });
             client.on('message', (topic, msg) => {
                 const val = msg.toString();
@@ -588,21 +645,29 @@
                     case TOPICS.SPO2: updateSpO2(val); break;
                     case TOPICS.FINGER_STATUS: updateFinger(val); break;
                     case TOPICS.FALL_STATUS: updateAI(val, currentFallScore); break;
-                    case TOPICS.FALL_SCORE: updateAI(currentFallStatus, parseFloat(val)); break;
+                    case TOPICS.FALL_SCORE: currentFallScore = parseFloat(val); updateAI(currentFallStatus, currentFallScore); break;
                 }
             });
         }
 
-        // Gắn sự kiện
-        document.getElementById('buzzer-auto').onclick = () => setBuzzerMode('AUTO');
-        document.getElementById('buzzer-manual').onclick = () => setBuzzerMode('MANUAL');
-        document.getElementById('buzzer-on').onclick = () => sendBuzzerCommand('ON');
-        document.getElementById('buzzer-off').onclick = () => sendBuzzerCommand('OFF');
-        document.getElementById('led-auto').onclick = () => setLEDMode('AUTO');
-        document.getElementById('led-manual').onclick = () => setLEDMode('MANUAL');
-        document.getElementById('led-on').onclick = () => sendLEDCommand('ON');
-        document.getElementById('led-off').onclick = () => sendLEDCommand('OFF');
+        // GÁN SỰ KIỆN CLICK - QUAN TRỌNG
+        document.addEventListener('DOMContentLoaded', function() {
+            // Buzzer events
+            document.getElementById('buzzer-auto').onclick = () => setBuzzerMode('AUTO');
+            document.getElementById('buzzer-manual').onclick = () => setBuzzerMode('MANUAL');
+            document.getElementById('buzzer-on').onclick = () => sendBuzzerCommand('ON');
+            document.getElementById('buzzer-off').onclick = () => sendBuzzerCommand('OFF');
+            
+            // LED events
+            document.getElementById('led-auto').onclick = () => setLEDMode('AUTO');
+            document.getElementById('led-manual').onclick = () => setLEDMode('MANUAL');
+            document.getElementById('led-on').onclick = () => sendLEDCommand('ON');
+            document.getElementById('led-off').onclick = () => sendLEDCommand('OFF');
+            
+            console.log("Event listeners attached");
+        });
 
+        // Khởi tạo
         initCharts();
         connectMQTT();
         updateUI();
